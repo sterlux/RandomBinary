@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Memorama Binario</title>
+<style>
+  :root {
+    --green: #00ff66;
+    --green-dim: #00a844;
+    --green-dark: #003b18;
+    --bg: #000;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--green);
+    font-family: "Courier New", Courier, monospace;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #rain {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+  }
+
+  main {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3vmin;
+    padding: 3vmin;
+    text-align: center;
+  }
+
+  h1 {
+    font-size: clamp(1.4rem, 5vmin, 3.5rem);
+    letter-spacing: 0.15em;
+    text-shadow: 0 0 10px var(--green), 0 0 25px var(--green-dim);
+  }
+
+  .panel {
+    background: rgba(0, 0, 0, 0.82);
+    border: 2px solid var(--green);
+    border-radius: 2vmin;
+    box-shadow: 0 0 30px rgba(0, 255, 102, 0.35), inset 0 0 30px rgba(0, 255, 102, 0.12);
+    padding: 3vmin 5vmin;
+  }
+
+  .bits {
+    display: flex;
+    gap: 3vmin;
+    justify-content: center;
+  }
+
+  .bit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1vmin;
+  }
+
+  .bit .digit {
+    width: 17vmin;
+    height: 23vmin;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19vmin;
+    font-weight: bold;
+    line-height: 1;
+    border: 2px solid var(--green-dim);
+    border-radius: 1.5vmin;
+    background: rgba(0, 59, 24, 0.55);
+    text-shadow: 0 0 12px var(--green), 0 0 30px var(--green);
+    transition: transform 0.15s;
+  }
+
+  .bit .digit.locked {
+    animation: pop 0.35s ease-out;
+  }
+
+  .bit .weight {
+    font-size: clamp(1rem, 3.5vmin, 2.2rem);
+    color: var(--green-dim);
+  }
+
+  .decimal {
+    margin-top: 3vmin;
+    font-size: clamp(1.6rem, 7vmin, 5rem);
+    text-shadow: 0 0 10px var(--green);
+  }
+
+  .decimal .value {
+    display: inline-block;
+    min-width: 2ch;
+    font-size: 1.6em;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 12px var(--green), 0 0 30px var(--green);
+  }
+
+  .decimal.hidden .value { opacity: 0; }
+
+  button#generate {
+    font-family: inherit;
+    font-size: clamp(1.5rem, 6vmin, 4rem);
+    font-weight: bold;
+    letter-spacing: 0.1em;
+    color: #000;
+    background: var(--green);
+    border: none;
+    border-radius: 2vmin;
+    padding: 2.5vmin 8vmin;
+    cursor: pointer;
+    box-shadow: 0 0 25px var(--green), 0 0 60px rgba(0, 255, 102, 0.5);
+    transition: transform 0.1s, box-shadow 0.1s, opacity 0.2s;
+  }
+
+  button#generate:active { transform: scale(0.95); }
+  button#generate:disabled { opacity: 0.5; }
+
+  .corner {
+    position: fixed;
+    bottom: 2vmin;
+    right: 2vmin;
+    z-index: 2;
+    font-family: inherit;
+    font-size: clamp(0.8rem, 2.2vmin, 1.2rem);
+    color: var(--green-dim);
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid var(--green-dim);
+    border-radius: 1vmin;
+    padding: 1vmin 2vmin;
+    cursor: pointer;
+  }
+
+  @keyframes pop {
+    0%   { transform: scale(1.25); color: #fff; }
+    100% { transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bit .digit.locked { animation: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="rain"></canvas>
+
+<main>
+  <h1>&gt; MEMORAMA BINARIO_</h1>
+
+  <section class="panel">
+    <div class="bits" id="bits">
+      <div class="bit"><div class="digit">0</div><div class="weight">8</div></div>
+      <div class="bit"><div class="digit">0</div><div class="weight">4</div></div>
+      <div class="bit"><div class="digit">0</div><div class="weight">2</div></div>
+      <div class="bit"><div class="digit">0</div><div class="weight">1</div></div>
+    </div>
+    <div class="decimal hidden" id="decimal">Decimal: <span class="value" id="value">0</span></div>
+  </section>
+
+  <button id="generate" type="button">GENERAR</button>
+</main>
+
+<button class="corner" id="fullscreen" type="button">⛶ Pantalla completa</button>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Matrix rain background ----------
+  var canvas = document.getElementById("rain");
+  var ctx = canvas.getContext("2d");
+  var fontSize, columns, drops;
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fontSize = Math.max(16, Math.round(Math.min(window.innerWidth, window.innerHeight) / 32));
+    columns = Math.ceil(window.innerWidth / fontSize);
+    drops = [];
+    for (var i = 0; i < columns; i++) {
+      drops[i] = Math.random() * -50;
+    }
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+  }
+
+  function drawRain() {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+    ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+    ctx.font = "bold " + fontSize + "px 'Courier New', monospace";
+    for (var i = 0; i < columns; i++) {
+      var y = drops[i] * fontSize;
+      ctx.fillStyle = Math.random() > 0.96 ? "#ccffdd" : "#00cc55";
+      ctx.fillText(Math.random() > 0.5 ? "1" : "0", i * fontSize, y);
+      if (y > window.innerHeight && Math.random() > 0.975) {
+        drops[i] = 0;
+      }
+      drops[i]++;
+    }
+  }
+
+  window.addEventListener("resize", resize);
+  resize();
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setInterval(drawRain, 50);
+  }
+
+  // ---------- Number generator ----------
+  var digits = document.querySelectorAll("#bits .digit");
+  var decimalBox = document.getElementById("decimal");
+  var valueEl = document.getElementById("value");
+  var button = document.getElementById("generate");
+  var last = -1;
+
+  function randomNumber() {
+    // 0..15, never the same number twice in a row
+    var n;
+    do {
+      n = Math.floor(Math.random() * 16);
+    } while (n === last);
+    last = n;
+    return n;
+  }
+
+  function generate() {
+    button.disabled = true;
+    decimalBox.classList.add("hidden");
+
+    var n = randomNumber();
+    var bits = n.toString(2).padStart(4, "0");
+    var ticks = 0;
+    var lockAt = [8, 12, 16, 20]; // each digit stops spinning one after another
+
+    digits.forEach(function (d) { d.classList.remove("locked"); });
+
+    var timer = setInterval(function () {
+      ticks++;
+      for (var i = 0; i < 4; i++) {
+        if (ticks < lockAt[i]) {
+          digits[i].textContent = Math.random() > 0.5 ? "1" : "0";
+        } else if (ticks === lockAt[i]) {
+          digits[i].textContent = bits[i];
+          digits[i].classList.add("locked");
+        }
+      }
+      if (ticks >= lockAt[3]) {
+        clearInterval(timer);
+        valueEl.textContent = n;
+        decimalBox.classList.remove("hidden");
+        button.disabled = false;
+      }
+    }, 60);
+  }
+
+  button.addEventListener("click", generate);
+
+  // ---------- Fullscreen + keep tablet screen awake ----------
+  var fsButton = document.getElementById("fullscreen");
+  var wakeLock = null;
+
+  function requestWakeLock() {
+    if ("wakeLock" in navigator) {
+      navigator.wakeLock.request("screen").then(function (lock) {
+        wakeLock = lock;
+      }).catch(function () {});
+    }
+  }
+
+  fsButton.addEventListener("click", function () {
+    var el = document.documentElement;
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      (el.requestFullscreen || el.webkitRequestFullscreen || function () {}).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || function () {}).call(document);
+    }
+    requestWakeLock();
+  });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && wakeLock !== null) {
+      requestWakeLock();
+    }
+  });
+
+  button.addEventListener("click", function () {
+    if (wakeLock === null) requestWakeLock();
+  }, { once: true });
+
+  generate();
+})();
+</script>
+</body>
+</html>
